@@ -15,3 +15,87 @@ async def fetch_emails(graph_client: GraphServiceClient):
             return "No emails found or failed to fetch emails."
     except Exception as e:
         return f"Error fetching emails: {str(e)}"
+
+async def fetch_all_emails(graph_client: GraphServiceClient):
+    """
+    Fetch all emails from the user's inbox with pagination.
+    """
+    try:
+        emails = []
+        messages = await graph_client.me.messages.get()
+        emails.extend(messages.value)
+
+        # Handle pagination
+        while messages.odata_next_link:
+            messages = await graph_client.get(messages.odata_next_link)
+            emails.extend(messages.value)
+
+        return {"emails": emails}
+    except Exception as e:
+        return {"error": str(e)}
+    
+async def fetch_email_details(graph_client: GraphServiceClient, message_id: str):
+    """
+    Fetch email details (subject, body, sender) using the message ID.
+    :param graph_client: Authenticated Microsoft Graph client.
+    :param message_id: The ID of the email message to fetch.
+    :return: Dictionary containing email details (subject, body, sender).
+    """
+    try:
+        # Fetch the email message using the Graph client
+
+        message = await graph_client.me.messages.by_message_id(message_id).get()
+
+        # Extract email details
+        await process_email(message)
+
+        return message
+    except Exception as e:
+        return {"error": str(e)}
+
+async def process_email(message: str):
+    """
+    Extract and print key details from the email message object.
+    """
+    try:
+        # Extract email metadata
+        email_id = message.id
+        subject = message.subject
+        received_time = message.received_date_time
+        sent_time = message.sent_date_time
+        from_name = message.from_.email_address.name
+        from_address = message.from_.email_address.address
+
+        # Extract recipients
+        to_recipients = [
+            f"{recipient.email_address.name} <{recipient.email_address.address}>"
+            for recipient in message.to_recipients
+        ]
+
+        # Extract body content
+        body_content = message.body.content
+        body_type = message.body.content_type.value  # 'html' or 'text'
+
+        # Email importance
+        importance = message.importance.value  # 'normal', 'high', 'low'
+
+        # Web link to email
+        web_link = message.web_link
+
+        # Print extracted details
+        print(f"Email ID: {email_id}")
+        print(f"Subject: {subject}")
+        print(f"Received Time: {received_time}")
+        print(f"Sent Time: {sent_time}")
+        print(f"From: {from_name} <{from_address}>")
+        print(f"To: {', '.join(to_recipients)}")
+        print(f"Importance: {importance}")
+        print(f"Body Type: {body_type}")
+        print(f"Body Preview:\n{body_content}")  # Truncated for readability
+        print(f"View Email: {web_link}")
+
+    except Exception as e:
+        print(f"Error processing email: {str(e)}")
+
+
+

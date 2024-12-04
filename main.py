@@ -1,63 +1,71 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, g
+import asyncio
+import datetime
 from azure.identity import AuthorizationCodeCredential
 from msgraph import GraphServiceClient
-import asyncio
-from app.email import fetch_emails
-
+from app.subscription import create_subscription, handle_notifications
+from app.graph_client import get_graph_client
 from config import Config
 
-
-config = Config()
-
-CLIENT_ID = config.CLIENT_ID
-TENANT_ID = config.TENANT_ID
-CLIENT_SECRET = config.CLIENT_SECRET
-REDIRECT_URI = config.REDIRECT_URI
-AUTHORITY_URL = config.AUTHORITY_URL
-SCOPES = ["Mail.Read", "User.Read"]
-
-# Flask app for handling OAuth flow
+# Flask app for handling OAuth flow and webhooks
 app = Flask(__name__)
+config = Config()
+global graph_client
 
 @app.route("/")
 def login():
-    """Redirect user to Microsoft's authorization endpoint."""
-    auth_url = f"{AUTHORITY_URL}/oauth2/v2.0/authorize"
+    """
+    Redirect user to Microsoft's authorization endpoint.
+    """
+    auth_url = f"{config.AUTHORITY_URL}/{config.TENANT_ID}/oauth2/v2.0/authorize"
     params = {
-        "client_id": CLIENT_ID,
+        "client_id": config.CLIENT_ID,
         "response_type": "code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": config.REDIRECT_URI,
         "response_mode": "query",
-        "scope": " ".join(SCOPES),
+        "scope": "Mail.Read User.Read",
     }
     query = "&".join([f"{key}={value}" for key, value in params.items()])
     return redirect(f"{auth_url}?{query}")
 
 @app.route("/callback")
 def callback():
-    """Handle the redirect and exchange authorization code for access token."""
+    """
+    Handle the redirect and exchange authorization code for access token.
+    Then create a subscription to monitor the user's inbox.
+    """
     code = request.args.get("code")
     if not code:
         return "Authorization failed. No code provided."
 
     try:
-        # Exchange the authorization code for an access token
-        credential = AuthorizationCodeCredential(
-            tenant_id=TENANT_ID,
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
-            authorization_code=code,
-            redirect_uri=REDIRECT_URI,
-        )
+        # Initialize Graph client with the authorization code
+        graph_client = get_graph_client(auth_code=code)
 
-        # Initialize the Graph client with the credential
-        graph_client = GraphServiceClient(credentials=credential)
+        # Create a subscription to monitor the user's inbox
+        callback_url = config.CALLBACK_URL  # Public URL for notifications
+        subscription = asyncio.run(create_subscription(graph_client, callback_url))
 
-        # Use asyncio to call the async function and fetch emails
-        emails = asyncio.run(fetch_emails(graph_client))
-        return emails
+        if "error" in subscription:
+            return f"Failed to create subscription: {subscription['error']}"
+        return f"Subscription created successfully! Subscription ID: {subscription['id']}"
     except Exception as e:
-        return f"Failed to authenticate: {str(e)}"
+        return f"Failed to authenticate and create subscription: {str(e)}"
+
+@app.route("/notifications", methods=["POST"])
+def notifications():
+    """
+    Handle Microsoft Graph notifications (webhook endpoint).
+    """
+
+    if "validationToken" in request.args:
+        # Validation token for subscription verification
+        return request.args["validationToken"], 200
+
+    # Process the notification payload
+    notification_data = request.json
+    handle_notifications(notification_data)
+    return "", 202
 
 if __name__ == "__main__":
     app.run(port=8000, debug=True)
