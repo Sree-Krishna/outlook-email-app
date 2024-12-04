@@ -10,8 +10,9 @@ class Config:
     TENANT_ID = os.getenv("TENANT_ID")
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
     REDIRECT_URI = os.getenv("REDIRECT_URI")
+    LIFECYCLE_URL = os.getenv("LIFECYCLE_URL")
     CALLBACK_URL = os.getenv("CALLBACK_URL")
-    # Additional configurations can go here
+
     GRAPH_SCOPES = ["https://graph.microsoft.com/.default"]
     GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0"
     AUTHORITY_URL = f"https://login.microsoftonline.com/"

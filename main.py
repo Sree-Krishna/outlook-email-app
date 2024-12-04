@@ -3,7 +3,7 @@ import asyncio
 import datetime
 from azure.identity import AuthorizationCodeCredential
 from msgraph import GraphServiceClient
-from app.subscription import create_subscription, handle_notifications
+from app.subscription import create_subscription, handle_notifications, validate_lifecycle_request
 from app.graph_client import get_graph_client
 from config import Config
 
@@ -66,6 +66,10 @@ def notifications():
     notification_data = request.json
     handle_notifications(notification_data)
     return "", 202
+
+@app.route("/lifecycle", methods=["GET", "POST"])
+def lifecycle():
+    return validate_lifecycle_request()
 
 if __name__ == "__main__":
     app.run(port=8000, debug=True)

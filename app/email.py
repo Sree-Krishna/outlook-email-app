@@ -1,4 +1,9 @@
 from msgraph import GraphServiceClient
+from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
+from msgraph.generated.users.item.messages.item.reply_all.reply_all_post_request_body import ReplyAllPostRequestBody
+from msgraph.generated.models.message import Message
+from msgraph.generated.models.recipient import Recipient
+from msgraph.generated.models.email_address import EmailAddress
 import asyncio
 
 async def fetch_emails(graph_client: GraphServiceClient):
@@ -49,7 +54,6 @@ async def fetch_email_details(graph_client: GraphServiceClient, message_id: str)
         # Extract email details
         await process_email(message)
 
-        return message
     except Exception as e:
         return {"error": str(e)}
 
@@ -97,5 +101,26 @@ async def process_email(message: str):
     except Exception as e:
         print(f"Error processing email: {str(e)}")
 
+async def reply_message(graph_client: GraphServiceClient, body):
+    request_body = ReplyPostRequestBody(
+        message = Message(
+            to_recipients = [
+                Recipient(
+                    email_address = EmailAddress(
+                        address = body.address,
+                        name = body.name,
+                    ),
+                )
+            ],
+        ),
+        comment = body.comment,
+    )
 
+    await graph_client.me.messages.by_message_id('message-id').reply.post(request_body)
 
+async def reply_all_message(graph_client: GraphServiceClient):
+    request_body = ReplyAllPostRequestBody(
+        comment = "comment-value",
+    )
+
+    await graph_client.me.messages.by_message_id('message-id').reply_all.post(request_body)
